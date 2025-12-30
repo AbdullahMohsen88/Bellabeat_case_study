@@ -1,0 +1,751 @@
+---
+title: "Bellabeat Analysis Documentation"
+author: "Abdullah Mohsen"
+date: "2025-12-13"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: right
+    code-fold: true
+    code-summary: "Show code"
+    number-sections: false
+    smooth-scroll: true
+    self-contained: true
+---
+
+### **Introduction**
+
+***Bellabeat*** is a high-tech company that manufactures health-focused smart products. It develops beautifully designed technology that informs and inspires women around the world. Collecting data on activity, sleep, stress, and reproductive health has allowed ***Bellabeat*** to empower women with knowledge about their own health and habits.
+
+#### **Business Task**
+
+This report analyzes ***fitbit*** smart device usage data in order discover trends and gain insight into how consumers use ***non-bellabeat*** smart devices, and how to apply these insights to ***Bellabeat*** product, and influence ***Bellabeat*** marketing strategy.
+
+### **Data Description**
+
+-   Origin: Datasets was collected from eligible ***Fitbit*** users who consented to the submission of their personal tracker data, and was subsequently uploaded to *kaggle* by the contributor [Mobius](https://www.kaggle.com/arashnic).
+-   Time Period: between 12 March 2016 – 12 May 2016.
+-   File Format: (CSV) files, structured into two months. The data files is organized by: daily, and minute-level tables.
+-   Sample Size & Participation:
+
+```{r sampleTable, echo=FALSE}
+knitr::kable(data.frame(
+  Table        = c("dailyActivity", "sleepDay", "minutesCalories/Intensities/METs/Steps", "minuteSleep", "heartrate_seconds", "weightLogInfo"),
+  Participants = c(35, 24, 35, 25, 15, 13)), format = "pipe")
+```
+
+-   Access Details: Publicly accessible via [kaggle](https://www.kaggle.com/datasets/arashnic/fitbit).
+-   Reliability: First-party data directly from ***Fitbit*** devices, considered highly reliable.
+-   Environment: Analysis performed in RStudio using *tidyverse, dplyr, tidyr, ggplot2, lubridate, janitor, data.table, here*.
+
+```{r setupEnvironment, message=FALSE, warning=FALSE}
+library(tidyverse) 
+library(lubridate)
+library(data.table)  
+library(dplyr)
+library(tidyr)
+library(janitor)
+library(ggplot2)
+library(hms)
+#library(here)
+```
+
+-   Data content:
+    -   For the period March to April:
+        -   *dailyActivity_merged* it contains a daily-level 457 obs. and 15 variables including (Id, ActivityDate, TotalSteps, VeryActiveMinutes, FairlyActiveMinutes, LightlyActiveMinutes, SedentaryMinutes, Calories).
+        -   *minuteCaloriesNarrow_merged* it contains a minutes-level 1445040 obs. and 3 variables (Id, ActivityMinute, Calories).
+        -   *minuteIntensitiesNarrow_merged* it contains a minute-level 1445040 obs. and 3 variables (Id, ActivityMinute, Intensity). Intensity value (0 = Sedentary, 1 = Light, 2 = Moderate, 3 = Very Active).
+        -   *minuteStepsNarrow_merged* it contains a minute-level 1445040 obs. and 3 variables (Id, ActivityMinute, Steps).
+        -   *minuteMETsNarrow_merged* it contains a minute-level 1445040 obs. and 3 variables (Id, ActivityMinute, METs). MET values exported from Fitabase are multiplied by 10.
+        -   *minuteSleep_merged* it contains a minute-level 198559 obs. and 4 variables (Id, date, value, logId).
+    -   For the period April to May:
+        -   *dailyActivity_merged* it contains a daily-level 940 obs. and 15 variables including (Id, ActivityDate, TotalSteps, VeryActiveMinutes, FairlyActiveMinutes, LightlyActiveMinutes, SedentaryMinutes, Calories).
+        -   *sleepDay_merged* it contains a daily-level 413 obs. and 5 variables including (Id, SleepDay, TotalSleepRecords, TotalMinutesAsleep, TotalTimeInBed).\
+        -   *minuteCaloriesNarrow_merged* it contains a minutes-level 1325580 obs. and 3 variables (Id, ActivityMinute, Calories).
+        -   *minuteIntensitiesNarrow_merged* it contains a minute-level 1325580 obs. and 3 variables (Id, ActivityMinute, Intensity). Intensity value (0 = Sedentary, 1 = Light, 2 = Moderate, 3 = Very Active).
+        -   *minuteStepsNarrow_merged* it contains a minute-level 1325580 obs. and 3 variables (Id, ActivityMinute, Steps).
+        -   *minuteMETsNarrow_merged* it contains a minute-level 1325580 obs. and 3 variables (Id, ActivityMinute, METs). MET values exported from Fitabase are multiplied by 10.
+        -   *minuteSleep_merged* it contains a minute-level 188521 obs. and 4 variables (Id, date, value, logId).
+
+View [fitabase data dictionary](https://www.fitabase.com/media/1930/fitabasedatadictionary102320.pdf)
+
+-   Limitation:
+    -   Small sample: 35 participants, even fewer (sleep = 25, weight = 13, heartrate = 15). *Weight* and *haeartrate* samples was excluded from this study, as sample is too small.
+    -   Short duration: 61 days even less for some participants, Long-term habits and seasonal effects cannot be assessed.
+    -   No demographic variables: age, location, occupation, lifestyle.
+    -   Outdated data: collected in 2016.
+
+Must keep these limitations in mind when conducting the analysis.
+
+### **Processing Data**
+
+-   Defining a custom function named *read_and_combine*, the function purpose is to read two identical CSV files from two different file paths and combine them into a single data frame
+
+```{r readCombine-function}
+readCombine <- function(pattern1, pattern2, 
+    path1 = "~/R/Case_Studies/Bellabeat/01_Data/Raw/Fitabase_Data_3.12.16-4.11.16", 
+    path2 = "~/R/Case_Studies/Bellabeat/01_Data/Raw/Fitabase_Data_4.12.16-5.12.16") {
+  fread(file.path(path1, pattern1)) %>% 
+    bind_rows(fread(file.path(path2, pattern2))) %>% 
+    as_tibble()}
+```
+
+-   calling the defined *readCombine* function to read and combine the datasets that we need for this analysis by providing the names of the two files to merge
+
+```{r loadingData, warning=FALSE}
+# Reading datasets
+# Daily-level
+dailyActivity <- readCombine("dailyActivity_merged.csv",
+                                   "dailyActivity_merged.csv")
+
+setwd("~/R/Case_Studies/Bellabeat/01_Data/Raw/Fitabase_Data_4.12.16-5.12.16")
+
+sleepDay <- read.csv("sleepDay_merged.csv")
+
+# Minute-level
+calories_min <- readCombine("minuteCaloriesNarrow_merged.csv",
+                                 "minuteCaloriesNarrow_merged.csv")
+intensities_min <- readCombine("minuteIntensitiesNarrow_merged.csv",
+                                    "minuteIntensitiesNarrow_merged.csv")
+steps_min <- readCombine("minuteStepsNarrow_merged.csv",
+                              "minuteStepsNarrow_merged.csv")
+met_min <- readCombine("minuteMETsNarrow_merged.csv",
+                            "minuteMETsNarrow_merged.csv")
+sleep_min <- readCombine("minuteSleep_merged.csv", "minuteSleep_merged.csv")
+```
+
+-   Exploring the datasets and finding the number of participants of each dataset
+
+```{r explore}
+# Exploring
+glimpse(dailyActivity)
+cat("Number of Participants:", n_distinct(dailyActivity$Id))
+
+head(sleepDay)
+cat("Number of Participants:", n_distinct(sleepDay$Id))
+
+head(calories_min)
+cat("Number of Participants:", n_distinct(calories_min$Id))
+
+head(intensities_min)
+cat("Number of Participants:", n_distinct(intensities_min$Id))
+
+head(steps_min)
+cat("Number of Participants:", n_distinct(steps_min$Id))
+
+head(met_min)
+cat("Number of Participants:", n_distinct(met_min$Id))
+
+head(sleep_min)
+cat("Number of Participants:", n_distinct(sleep_min$Id))
+```
+
+-   Calculating NA values and duplicates:
+
+    -   *dailyActivity* has 0% NA values and 0% duplicated records
+
+    ```{r NA-dups-dailyActivity}
+    colSums(is.na(dailyActivity))
+    sum(duplicated(dailyActivity))
+    ```
+
+    -   *sleepDay* has 0% NA values and and 0.73% duplicated records
+
+    ```{r NA-dups-sleepDay}
+    colSums(is.na(sleepDay))
+    sum(duplicated(sleepDay))
+    ```
+
+    -   *calories_min* has 0% NA values and 0.38% duplicated records
+
+    ```{r NA-dups-calories}
+    colSums(is.na(calories_min))
+    sum(duplicated(calories_min))
+    ```
+
+    -   *intensities_min* has 0% NA values and 0.38% duplicated records
+
+    ```{r NA-dups-intensities}
+    colSums(is.na(intensities_min))
+    sum(duplicated(intensities_min))
+    ```
+
+    -   *steps_min* has 0% NA values and 0.38% duplicated records
+
+    ```{r NA-dups-steps}
+    colSums(is.na(steps_min))
+    sum(duplicated(steps_min))
+    ```
+
+    -   *met_min* has 0% NA values and 0.38% duplicated records
+
+    ```{r NA-dups-met}
+    colSums(is.na(met_min))
+    sum(duplicated(met_min))
+    ```
+
+    -   *sleep_min* has 0% NA values and and 1.11% duplicated records
+
+    ```{r NA_dups-sleep}
+    colSums(is.na(sleep_min))
+    sum(duplicated(sleep_min))
+    ```
+
+-   Defining a custom function named *standardize_id*, the function purpose is to change the data type of the *Ids* from *int* to *character*
+
+```{r standardize-id}
+standardize_id <- function(df) {
+  df %>% 
+    mutate(Id = as.character(Id))}
+```
+
+-   Standardizing Ids to *character*, date/time to the appropriate format, and dispose duplicates
+
+```{r Standardizing}
+# Standardization of Ids, date and dealing with duplicates
+# daily-level
+dailyActivity_v2 <- dailyActivity %>% 
+  standardize_id() %>% 
+  mutate(ActivityDate = mdy(ActivityDate)) %>% 
+  select(Id, ActivityDate, SedentaryMinutes, LightlyActiveMinutes, FairlyActiveMinutes,
+         VeryActiveMinutes, TotalSteps, TotalDistance, Calories) %>% 
+  distinct()
+
+str(dailyActivity_v2)
+
+sleepDay_v2 <- sleepDay %>% 
+  standardize_id() %>% 
+  mutate(ActivityDate = as_date(mdy_hms(SleepDay))) %>% 
+  select(Id, ActivityDate, TotalSleepRecords, TotalMinutesAsleep, TotalTimeInBed) %>% 
+  distinct()
+
+str(sleepDay_v2)
+
+# minute-level
+calories_min_v2 <- calories_min %>% 
+  standardize_id() %>% 
+  mutate(ActivityMinute = mdy_hms(ActivityMinute)) %>% 
+  distinct()
+
+str(calories_min_v2)
+
+intensities_min_v2 <- intensities_min %>% 
+  standardize_id() %>% 
+  mutate(ActivityMinute = mdy_hms(ActivityMinute)) %>% 
+  distinct()
+
+str(intensities_min_v2)
+
+steps_min_v2 <- steps_min %>% 
+  standardize_id() %>% 
+  mutate(ActivityMinute = mdy_hms(ActivityMinute)) %>% 
+  distinct()
+
+str(steps_min_v2)
+
+met_min_v2 <- met_min %>% 
+  standardize_id() %>% 
+  mutate(ActivityMinute = mdy_hms(ActivityMinute),
+         METs = METs/10) %>%
+  distinct()
+
+str(met_min_v2)
+
+sleep_min_v2 <- sleep_min %>% 
+  standardize_id() %>% 
+  mutate(ActivityMinute = mdy_hms(date),
+         logId = as.character(logId)) %>% 
+  select(Id, ActivityMinute, value, logId) %>% 
+  distinct()
+
+str(sleep_min_v2)
+
+```
+
+-   Aggregation Minute-level data to hourly and daily, and segment into four distinct categories based on their daily average activity intensity minutes:
+    -   Very Active Participant: very active minutes \>= 25 minutes.
+    -   Moderately Active Participant: fairly active + very active \>= 40 minutes.
+    -   Lightly Active Participant: no guideline recommendation, but a little activity is better than nothing, lightly active \>= 150 minutes.
+
+The segmentation is based on the recommendation guidelines from [WHO](https://iris.who.int/server/api/core/bitstreams/faa83413-d89e-4be9-bb01-b24671aef7ca/content) page 12-13. A general rule of thumb is that 2 minutes of moderate-intensity activity counts the same as 1 minute of very-intensity activity. [odphp](https://odphp.health.gov/sites/default/files/2019-09/Physical_Activity_Guidelines_2nd_edition.pdf#page=58).
+
+```{r Aggregating}
+# Aggregations
+calories_hourly <- calories_min_v2 %>% 
+  mutate(ActivityHour = floor_date(ActivityMinute, "hour")) %>%
+  group_by(Id, ActivityHour) %>%
+  summarise(
+    TotalCalories_h = sum(Calories),
+    .groups = "drop"
+  )
+
+calories_daily <- calories_hourly %>% 
+  mutate(Date = as_date(ActivityHour)) %>% 
+  group_by(Id, Date) %>% 
+  summarise(
+    TotalCalories_d = sum(TotalCalories_h),
+    .groups = "drop"
+  )
+
+intensities_hourly <- intensities_min_v2 %>% 
+  mutate(ActivityHour = floor_date(ActivityMinute, "hour")) %>%
+  group_by(Id, ActivityHour) %>%
+  summarise(
+    Sedentary_min = sum(Intensity == 0),
+    LightActive_min     = sum(Intensity == 1),
+    ModerateActive_min  = sum(Intensity == 2),
+    VeryActive_min  = sum(Intensity == 3),
+    .groups = "drop"
+  )
+
+intensities_daily <- intensities_hourly %>% 
+  mutate(Date = as_date(ActivityHour)) %>% 
+  group_by(Id, Date) %>% 
+  summarise(
+    Sedentary_min = sum(Sedentary_min),
+    LightActive_min     = sum(LightActive_min),
+    ModerateActive_min  = sum(ModerateActive_min),
+    VeryActive_min  = sum(VeryActive_min),
+    TotalActive_min = LightActive_min + ModerateActive_min + VeryActive_min,
+    .groups = "drop"
+  )
+
+steps_hourly <- steps_min_v2 %>% 
+  mutate(ActivityHour = floor_date(ActivityMinute, "hour")) %>%
+  group_by(Id, ActivityHour) %>%
+  summarise(
+    TotalSteps_h = sum(Steps),
+    .groups = "drop"
+  )
+
+steps_daily <- steps_hourly %>% 
+  mutate(Date = as_date(ActivityHour)) %>% 
+  group_by(Id, Date) %>% 
+  summarise(
+    TotalSteps_d = sum(TotalSteps_h),
+    .groups = "drop"
+  )
+
+met_hourly <- met_min_v2 %>% 
+  mutate(ActivityHour = floor_date(ActivityMinute, "hour")) %>%
+  group_by(Id, ActivityHour) %>%
+  summarise(
+    TotalMET_h = sum(METs) / 10,
+    .groups = "drop"
+  )
+
+met_daily <- met_hourly %>% 
+  mutate(Date = as_date(ActivityHour)) %>% 
+  group_by(Id, Date) %>% 
+  summarise(
+    TotalMET_d = sum(TotalMET_h),
+    .groups = "drop"
+  )
+
+sleep_hourly <- sleep_min_v2 %>% 
+  filter(value == 1) %>%
+  mutate(ActivityHour = floor_date(ActivityMinute, "hour")) %>% 
+  count(Id, ActivityHour, name = "TotalSleep_min")
+
+sleep_daily <- sleep_hourly %>% 
+  mutate(Date = as_date(ActivityHour)) %>% 
+  group_by(Id, Date) %>% 
+  summarise(
+    TotalSleep_min = sum(TotalSleep_min),
+    .groups = "drop"
+  )
+
+# Participant Segmentation
+userSegment <- intensities_daily %>%
+  group_by(Id) %>%
+  summarise(
+    avgSedentary = mean(Sedentary_min),
+    avgLightActive     = mean(LightActive_min),
+    avgModerateActive  = mean(ModerateActive_min),
+    avgVeryActive  = mean(VeryActive_min),
+    avgActive_min    = mean(TotalActive_min),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    userType = case_when(
+      avgVeryActive >= 25 ~ "Very Active",
+      (avgModerateActive + avgVeryActive) >= 50 ~ "Moderately Active", 
+      avgLightActive >= 120 ~ "Lightly Active",
+      TRUE ~ "Sedentary"),
+    userType = factor(userType,
+                      levels = c("Sedentary", "Lightly Active",
+                                 "Moderately Active", "Very Active")))
+
+no_userSegment <- userSegment %>% 
+  group_by(userType) %>% 
+  summarise(
+    userCount = n()
+  )
+```
+
+-   Joining the aggregated data into master tables hourly and daily
+
+```{r Joining}
+# Joining
+hourly <- steps_hourly %>% 
+  inner_join(intensities_hourly, by = c("Id", "ActivityHour")) %>% 
+  inner_join(met_hourly, by = c("Id", "ActivityHour")) %>% 
+  inner_join(calories_hourly, by = c("Id", "ActivityHour")) %>% 
+  left_join(
+    (userSegment %>% select(Id, userType)),
+    by = "Id"
+  )
+
+hourly_v2 <- hourly %>% 
+  mutate(Date = as_date(ActivityHour),
+         Hour = as_hms(ActivityHour))
+
+hourly_sleep <- hourly_v2 %>% 
+  inner_join(sleep_hourly, by = c("Id", "ActivityHour"))
+
+daily <- steps_daily %>% 
+  inner_join(intensities_daily, by = c("Id", "Date")) %>% 
+  inner_join(met_daily, by = c("Id", "Date")) %>% 
+  inner_join(calories_daily, by = c("Id", "Date")) %>% 
+  left_join(
+    (userSegment %>% select(Id, userType)),
+    by = "Id"
+  )
+
+daily_sleep <- daily %>% 
+  inner_join(sleep_daily, by = c("Id", "Date"))
+
+dailyActivity_v3 <- dailyActivity_v2 %>% 
+  left_join(
+    (userSegment %>% select(Id, userType)),
+    by = "Id")
+
+dailyActivity_sleep <- dailyActivity_v3 %>% 
+  inner_join(sleepDay_v2, by = c("Id", "ActivityDate"))
+
+```
+
+### **Analysis and Finding**
+
+-   Quick calculations and summary statistics
+
+```{r calcAvg}
+avgHourly <- hourly_v2 %>% 
+  group_by(Hour, userType) %>% 
+  summarise(
+    avgStep = round(mean(TotalSteps_h),2),
+    avgSedentary = round(mean(Sedentary_min),2),
+    avgLightActive = round(mean(LightActive_min),2),
+    avgModerateActive = round(mean(ModerateActive_min),2),
+    avgVeryActive = round(mean(VeryActive_min),2),
+    avgMETs = round(mean(TotalMET_h),2),
+    avgCalories = round(mean(TotalCalories_h),2),
+    avgActivity = round(avgLightActive + avgModerateActive + avgVeryActive),
+    .groups = "drop"
+  ) 
+
+avgHourlySleep <- hourly_sleep %>% 
+  group_by(Hour, userType) %>% 
+  summarise(
+    avgSleep = round(mean(TotalSleep_min),2),
+    .groups = "drop"
+  ) 
+
+avgDaily <- daily %>% 
+  group_by(userType) %>% 
+  summarise(
+    avgStep = round(mean(TotalSteps_d),2),
+    avgSedentary = round(mean(Sedentary_min),2),
+    avgLightActive = round(mean(LightActive_min),2),
+    avgModerateActive = round(mean(ModerateActive_min),2),
+    avgVeryActive = round(mean(VeryActive_min),2),
+    avgMETs = round(mean(TotalMET_d),2),
+    avgCalories = round(mean(TotalCalories_d),2),
+    .groups = "drop"
+  ) 
+
+
+avgDailySleep <- daily_sleep %>% 
+  group_by(userType) %>% 
+  summarise(
+    avgSleep = round(mean(TotalSleep_min),2),
+    .groups = "drop"
+  ) 
+
+sleepQuality <- sleepDay_v2 %>% 
+  left_join(userSegment %>% select(Id, userType), by = "Id") %>% 
+  group_by(Id, userType) %>% 
+  summarise(
+    avgSleep_min = mean(TotalMinutesAsleep),
+    avgToSleep_min = mean(TotalTimeInBed - TotalMinutesAsleep),
+    .groups = "drop"
+  ) %>%  
+  mutate(Quality = case_when(
+    avgSleep_min < 420 ~ "Under Sleep",
+    avgSleep_min > 540 ~ "Over Sleep",
+    TRUE ~ "Sufficient Sleep"))
+```
+
+```{r dailyActivity-stat}
+# dailyActivity statistics
+dailyActivity_v2 %>%  
+  select(TotalSteps,
+         SedentaryMinutes,
+         LightlyActiveMinutes,
+         FairlyActiveMinutes,
+         VeryActiveMinutes,
+         Calories) %>%
+  summary()
+```
+
+-   Participants daily average steps is 7281 steps, 992.5 minutes sedentary is high as the recommendation is to keep sedentary below 480 minutes, 185.4 minutes lightly active, 13.4 minutes fairly active, and 19.68 minutes very active, while they burn 2266 calories on daily average.
+
+```{r sleepDay-stat}
+sleepDay_v2 %>%  
+  select(TotalSleepRecords,
+         TotalMinutesAsleep,
+         TotalTimeInBed) %>%
+  summary()
+sleepDay_v2 %>% 
+  summarise(
+    avgTosleep = round(mean(TotalTimeInBed - TotalMinutesAsleep),2),
+    avgSleep = round(mean(TotalMinutesAsleep),2)
+  )
+```
+
+-   Participants on average sleeps once a day, and spends 39 minutes in bed before sleeping an average of 419.17 minutes, an approximate of 7 hours.
+
+#### **Visualization**
+
+-   Visualizing the distribution of Participant across different activity levels
+
+```{r userSegments}
+ggplot(no_userSegment, aes(x = userType, y = userCount, fill = userType)) + 
+  geom_col(width = 0.7) +
+  geom_label(
+    aes(label = paste(userCount)),
+    vjust = -0.5,
+    size = 3.3,
+    fill = "white",
+    linewidth = 0,
+    label.padding = unit(0.15, "lines")) +
+  labs(
+    title = "Participant Distribution Across Activity Intensity Category", 
+    subtitle = "Based on average minutes spent in each activity intensity category", 
+    x = "Participant Segments",
+    caption = "Source: Fitbit data 12 Mar 2016 to 12 May 2016.N = 35 participant
+    Participants were categorized by the average intensity minutes based on guidlines 
+    recommendation from WHO, AHA, ACSM.") +
+  scale_fill_brewer(palette = "Set2") +
+  ylim(0, 17) +
+  theme_minimal() +
+  theme(plot.subtitle = element_text(color = "gray40"),
+        legend.position = "none",
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        plot.caption = element_text(hjust = 0),
+        panel.border = element_rect(color = "gray80", fill = NA, linewidth = 0.5))
+```
+
+The majority of the participants are lightly active.
+
+-   Visualizing the positive correlation between steps taken and calories burned
+
+```{r stepsVScalories}
+ggplot(daily, aes(x = TotalSteps_d, y = TotalCalories_d)) +
+  geom_point() + 
+  geom_smooth() +
+  labs(
+    title = "Total Steps vs Calories Burned", 
+    subtitle = "Relationship between total steps and total calories burned", 
+    x = "Total Steps",
+    y = "Calories Burned",
+    caption = "Source: Fitbit data 12 Mar 2016 to 12 May 2016.N = 35 participant
+    The relationship between total steps taken and total calories burned. 
+    Positive correlation observed.") +
+  theme_minimal() +
+  theme(plot.subtitle = element_text(color = "gray40"),
+        plot.caption = element_text(hjust = 0),
+        panel.border = element_rect(color = "gray80", fill = NA, linewidth = 0.5))
+
+```
+
+the more steps taken the more calories burned.
+
+-   Visualizing daily average steps
+
+```{r avgStepsDaily}
+dailyActivity_v3 %>%
+  group_by(userType) %>% 
+  summarise(avgSteps = round(mean(TotalSteps),2),
+            avgDistance = mean(TotalDistance * 1000),
+            .groups = "drop"   ) %>%
+  select(userType, avgSteps, avgDistance) %>%
+  pivot_longer(cols = c(avgSteps, avgDistance),
+               names_to = "Metric",
+               values_to = "value") %>%
+  mutate(Metric = case_when(
+    Metric == "avgSteps" ~ "Average Steps",
+    Metric == "avgDistance" ~ "Average Distance"),
+    Metric = factor(Metric, levels = c("Average Steps", "Average Distance"))) %>%
+  ggplot(aes(x = userType, y = value, fill = Metric)) +
+  geom_col(position = "dodge", width = 0.7, alpha = 0.9) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(title = "Daily Average Steps and Distance Comparison by Participant 
+       Categories",
+       subtitle = "Average Steps and Average Distance in Meters",
+       x = "Participant Caregories",
+       y = "Value",
+       caption = "Source: Fitbit data 12 Mar 2016 to 12 May 2016. N = 35
+       participant",
+       fill = "") +
+  ylim(0, 12500) +
+  theme_minimal() +
+  theme(plot.subtitle = element_text(color = "gray40"),
+        legend.position = "top",
+        plot.caption = element_text(hjust = 0),
+        panel.border = element_rect(color = "gray80", fill = NA, linewidth = 0.5))
+```
+
+Sedentary participants average steps are very low. Encouraging users to set a personalized daily goal, starting with a baseline of 7,500 steps. This isn't just a number, it’s the threshold where heart health and energy levels begin to improve.
+
+-   Visualizing the positive correlation between total active minutes taken and METs
+
+```{r activeVSmets}
+ggplot(daily, aes(x = TotalActive_min, y = TotalMET_d)) +
+  geom_point() + 
+  geom_smooth() +
+  labs(
+    title = "Total Active Duration and METs", 
+    subtitle = "Visualizing Metabolic Equivalents relative to daily physical activity duration", 
+    x = "Total Active Minutes",
+    y = "MET Score",
+    caption = "Source: Fitbit data 12 Mar 2016 to 12 May 2016. N = 35 participant
+    The relationship between total active duration and 
+    total metabolic equivalents of task (METs). 
+    Positive correlation observed.") +
+  theme_minimal() +
+  theme(plot.subtitle = element_text(color = "gray40"),
+        plot.caption = element_text(hjust = 0),
+        panel.border = element_rect(color = "gray80", fill = NA, linewidth = 0.5))
+```
+
+the more active we are the more METs expenditure.
+
+-   Participants daily average active duration across different intensity levels
+
+```{r avgActiveDaily}
+avgDaily %>% 
+  select(userType, avgLightActive, avgModerateActive, avgVeryActive) %>% 
+  pivot_longer(
+    cols = c(avgLightActive, avgModerateActive, avgVeryActive),
+    names_to = "Metric",
+    values_to = "value") %>%
+  mutate(
+    Metric = case_when(
+      Metric == "avgLightActive" ~ "Light Intensity",
+      Metric == "avgModerateActive" ~ "Fair Intensity",
+      Metric == "avgVeryActive" ~ "Vigorous Intensity"),
+    Metric = factor(Metric, 
+                    levels = c("Light Intensity", "Fair Intensity", "Vigorous Intensity"))) %>%
+  ggplot(aes(x = userType, y = value, fill = Metric)) + 
+  geom_col(position = "dodge", width = 0.7, alpha = 0.9) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(
+    title = "Daily Activity Comparison by Participant Categories",
+    subtitle = "Activity Categories Durations",
+    x = "Participant Caregories",
+    y = "Value in Minutes",
+    caption = "Source: Fitbit data 12 Mar 2016 to 12 May 2016. N = 35 participant",
+    fill = "") +
+  theme_minimal() +
+  theme(plot.subtitle = element_text(color = "gray40"),
+        legend.position = "top",
+        plot.caption = element_text(hjust = 0),
+        panel.border = element_rect(color = "gray80", fill = NA, linewidth = 0.5))
+```
+
+Average daily activities for participant are light intensity. Sedentary participants average active duration is less than two hours a day. Instead of a generic alert, use a gentle nudge: "You've been focused for a while! How about a 2-minute stretch to recharge your energy?" This reflects self-care moment.
+
+-   Hourly average active minutes throughout the day
+
+```{r hourlyActive}
+ggplot(avgHourly, aes(x = Hour, y = avgActivity)) +
+  geom_col(fill = "purple") +
+  labs(title = "Distribution of Average Hourly Active Minutes",
+       subtitle = "Frequency of average active minutes spent per hour across all participants.",
+       y = "Average Active Minutes", 
+       x = "Hour of Day",
+       caption = "Source: Fitbit data 12 Mar 2016 to 12 May 2016. N = 35 participant") +
+  theme_minimal() +
+  theme(plot.subtitle = element_text(color = "gray40"),
+        plot.caption = element_text(hjust = 0),
+        axis.text.x = element_text(angle = 45),
+        panel.border = element_rect(color = "gray80", fill = NA, linewidth = 0.5))
+
+```
+
+Participants most active hours is between 5 PM and 7 PM, activity drops after 8 PM. 
+Send reminders when the user usually has a "gap" in their schedule. "It is perfect 
+for a quick 15-minute jog. Your future self will thank you for the endorphin boost!.
+
+- Visualizing the relation between sleep duration and time in bed
+
+```{r bedTime}
+ggplot(dailyActivity_sleep, aes(x = TotalTimeInBed, y = TotalMinutesAsleep)) +
+  geom_point() + 
+  geom_smooth() +
+  labs(
+    title = "Time in Bed VS Sleep Duration", 
+    subtitle = "Visualizing time in bed relation to sleep duration", 
+    y = "Sleep Duration",
+    x = "Time in Bed (min)",
+    caption = "Source: Fitbit data 12 Apr 2016 to 12 May 2016. N = 24 participant
+    The relationship between time in bed and 
+    sleep duration.") +
+  theme_minimal() +
+  theme(plot.subtitle = element_text(color = "gray40"),
+        plot.caption = element_text(hjust = 0),
+        panel.border = element_rect(color = "gray80", fill = NA, linewidth = 0.5))
+```
+
+There is a positive correlation between time in bed and minutes asleep.
+
+-   Comparison of sleep quality
+
+```{r avgSleep}
+ggplot(sleepQuality, aes(x = userType, fill = Quality)) +
+  geom_bar(position = "fill", width = 0.7) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(
+    title = "Sleep Quality by Participant Categories",
+    x = "Participants Categories",
+    y = "Sleep Quality",
+    fill = "Sleep Quality",
+    caption = "Source: Fitbit data. N = 24 participant."
+  ) +
+  theme_minimal() +
+  theme(plot.subtitle = element_text(color = "gray40"),
+        legend.position = "top",
+        plot.caption = element_text(hjust = 0),
+        panel.border = element_rect(color = "gray80", fill = NA, linewidth = 0.5))
+
+```
+
+Around 41% of participants have sufficient sleep. Frame sleep as a recovery 
+tool. "Tonight's Goal: 7–9 hours of rest to optimize your mood and immunity for 
+tomorrow. Your activity levels are winding down—it’s the perfect time to disconnect 
+and head to bed.
+
+### **Recommendation**
+
+1. Small Steps, Big Impact: Encourage users to set a personalized daily goal, starting with a baseline of 7,500 steps. This isn't just a number; it’s the threshold where 
+heart health and energy levels begin to significantly improve. Let's celebrate the journey to the first 7.5k, and introducing Challenges to boost baseline activity.
+2. Time for a Mindful Break: Instead of a generic alert, use a gentle nudge: "You've 
+been focused for a while! How about a 2-minute stretch to recharge your energy?" This reflects into a "self-care moment".
+3.  Use reminders when the user usually has a "gap" in their schedule. "It is perfect 
+for a quick 15-minute jog. Your future self will thank you for the endorphin boost!"
+4.  Frame sleep as a recovery tool. "Tonight's Goal: 7–9 hours of rest to optimize your mood and immunity for tomorrow. Your activity levels are winding down, it’s the perfect time to disconnect and head to bed", encouraging early sleep.
