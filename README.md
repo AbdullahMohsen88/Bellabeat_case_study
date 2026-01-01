@@ -30,7 +30,7 @@ and visualizations (`03_visualizations.R`).
 ## 6. Key Insights
 - **Activity Trends:** The majority of the users are lightly active, Users are 
 most active between 5 PM and 7 PM.
-- **Sleep:** Less than half of the participants have sufficient sleep, many users 
+- **Sleep:** Around **41%** of the participants have sufficient sleep, many users 
 sleep less than 7 hours.
 - **Steps:** Sedentary participants average steps are very low.
 
