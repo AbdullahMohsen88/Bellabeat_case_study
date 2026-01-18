@@ -29,10 +29,17 @@ and visualizations (`03_visualizations.R`).
 
 ## 6. Key Insights
 - **Activity Trends:** The majority of the users are lightly active, Users are 
-most active between 5 PM and 7 PM.
+most active between 5 PM and 7 PM. Use a gentle nudge when user is sedentary
+motivating them to do activity. Use reminders when the user usually has a
+“gap” in their schedule.
+<img width="2400" height="1485" alt="hourlyActive" src="https://github.com/user-attachments/assets/eedc39c1-a9cb-41d7-98e6-5f30c9018baf" />
 - **Sleep:** Around **41%** of the participants have sufficient sleep, many users 
-sleep less than 7 hours.
-- **Steps:** Sedentary participants average steps are very low.
+sleep less than 7 hours. Use “Night-time Wind-down” reminders to help users
+achieve the 7-9 hour sleep target for optimal recovery.
+<img width="2400" height="1485" alt="sleepQuality" src="https://github.com/user-attachments/assets/bfc39cec-fcdb-4f38-868b-75089293c16c" />
+- **Steps:** Sedentary participants average steps are very low. Launch a
+“7.5k Step Challenge” within the app to motivate users to reach the health baseline.
+<img width="2400" height="1485" alt="stepsVScalories" src="https://github.com/user-attachments/assets/6131c5b2-164a-4b5d-84fb-6fe92d8a7e92" />
 
 ## 7. How to Run
 1. Clone this repository.
